@@ -443,11 +443,11 @@ class BeadCalibrationDiagnostic(HasStrictTraits):
                      self.op._mefs[channel], 
                      marker = 'o')
             
-            plt.tight_layout(pad = 1.0)
-            
             xmin, xmax = plt.xlim()
             x = np.logspace(np.log10(xmin), np.log10(xmax))
             plt.plot(x, 
                      self.op._calibration_functions[channel](x), 
                      color = 'r', linestyle = ':')
+            
+        plt.tight_layout(pad = 0.8)
             
