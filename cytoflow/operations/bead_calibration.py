@@ -27,7 +27,9 @@ from traits.api import (HasStrictTraits, Str, CStr, File, Dict, Python,
                         Instance, Int, List, Float, Constant, Array, provides)
 import numpy as np
 import math
+import warnings
 import scipy.signal
+import scipy.optimize
         
 import matplotlib.pyplot as plt
 
@@ -188,9 +190,7 @@ class BeadCalibrationOp(HasStrictTraits):
 
         for channel in channels:
             data = beads_data[channel]
-            
-            # TODO - this assumes the data is on a linear scale.  check it!
-            
+                        
             # bin the data on a log scale
             data_range = experiment.metadata[channel]['range']
             hist_bins = np.logspace(1, math.log(data_range, 2), num = 1024, base = 2)
@@ -214,15 +214,15 @@ class BeadCalibrationOp(HasStrictTraits):
                 [x for x in peak_bins if hist_smooth[x] > peak_threshold 
                  and hist[1][x] > self.bead_brightness_threshold]
             
-            peaks = [hist_bins[x] for x in peak_bins_filtered]
+            self._peaks[channel] = peaks = [hist_bins[x] for x in peak_bins_filtered]
             
             mef_unit = self.units[channel]
             
+            # "mean equivalent fluorochrome"
+            mefs = self.beads[mef_unit]
+            
             if not mef_unit in self.beads:
                 raise util.CytoflowOpError("Invalid unit {0} specified for channel {1}".format(mef_unit, channel))
-            
-            # "mean equivalent fluorochrome"
-            mef = self.beads[mef_unit]
             
             if len(peaks) == 0:
                 raise util.CytoflowOpError("Didn't find any peaks; check the diagnostic plot")
@@ -230,9 +230,8 @@ class BeadCalibrationOp(HasStrictTraits):
                 raise util.CytoflowOpError("Found too many peaks; check the diagnostic plot")
             elif len(peaks) == 1:
                 # if we only have one peak, so just assume a multiplicative conversion
-                a = mef[-1] / peaks[0]
-                self._peaks[channel] = peaks
-                self._mefs[channel] = [mef[-1]]
+                self._mefs[channel] = [mefs[-1]]
+                a = mefs[-1] / peaks[0]
                 self._calibration_functions[channel] = lambda x, a=a: a * x
             else:
                 # if there are n >= 2 peaks, assume that the brighest peak is
@@ -242,33 +241,36 @@ class BeadCalibrationOp(HasStrictTraits):
                 # do it in log10 space because otherwise the brightest peaks
                 # have an outsized influence.
  
-                num_peaks = len(peaks)
-                mef_subset = mef[len(mef) - num_peaks:]
-                print mef_subset
-                print mef
+                self._mefs[channel] = mefs[len(mefs) - len(peaks):]
                      
-                # linear regression of the peak locations against mef subset
-                lr = np.polyfit(np.log10(peaks), 
-                                np.log10(mef_subset), 
+                # linear regression of the peak locations against mef subset,
+                # just to warn of nonlinearity (eg PMT voltage too high or low)
+                lr = np.polyfit(np.log10(self._peaks[channel]), 
+                                np.log10(self._mefs[channel]), 
                                 deg = 1, 
                                 full = True)
- 
-                self._peaks[channel] = peaks
-                self._mefs[channel] = mef_subset
-                         
-                # remember, these (linear) coefficients came from logspace, so 
-                # if the relationship in log10 space is Y = aX + b, then in
-                # linear space the relationship is x = 10**X, y = 10**Y,
-                # and y = (10**b) * x ^ a
-                 
-                # also remember that the result of np.polyfit is a list of
-                # coefficients with the highest power first!  so if we
-                # solve y=ax + b, coeff #0 is a and coeff #1 is b
-                 
+                
                 a = lr[0][0]
-                b = 10 ** lr[0][1]
+                if np.abs(1.0 - a) > 0.05:
+                    warnings.warn("Calibration fit for channel {0} is non-linear!"
+                                  .format(channel),
+                                  util.CytoflowOpWarning)
+               
+                # we used to use the entire (log)linear regression, but the 
+                # (log) part introduced nonlinearities which were bad.   
+#                 b = 10 ** lr[0][1]
+#                 self._calibration_functions[channel] = \
+#                     lambda x, a=a, b=b: b * np.power(x, a)
+                    
+#                 # now, we use a simple multiplicative scale
+                def mef_err(x):
+                    return np.sqrt(np.sum(np.square(np.log10(x * self._peaks[channel]) 
+                                                  - np.log10(self._mefs[channel]))))
+ 
+                m = scipy.optimize.minimize(mef_err, 1)
+ 
                 self._calibration_functions[channel] = \
-                    lambda x, a=a, b=b: b * np.power(x, a)
+                    lambda x, a=m.x[0]: a * x
 
     def apply(self, experiment):
         """Applies the bleedthrough correction to an experiment.
@@ -301,18 +303,17 @@ class BeadCalibrationOp(HasStrictTraits):
             raise util.CytoflowOpError("Calibration doesn't match units. "
                                   "Did you forget to call estimate()?")
 
-        # two things.  first, you can't raise a negative value to a non-integer
-        # power.  second, negative physical units don't make sense -- how can
-        # you have the equivalent of -5 molecules of fluoresceine?  so,
-        # we filter out negative values here.
+        # negative physical units don't make sense -- how can you have the 
+        # equivalent of -5 molecules of fluoresceine?  so, we filter out 
+        # negative values here.
 
         new_experiment = experiment.clone()
         
-        for channel in channels:
-            new_experiment.data = \
-                new_experiment.data[new_experiment.data[channel] > 0]
-                
-        new_experiment.data.reset_index(drop = True, inplace = True)
+#         for channel in channels:
+#             new_experiment.data = \
+#                 new_experiment.data[new_experiment.data[channel] > 0]
+#                 
+#         new_experiment.data.reset_index(drop = True, inplace = True)
         
         for channel in channels:
             calibration_fn = self._calibration_functions[channel]
@@ -388,6 +389,10 @@ class BeadCalibrationDiagnostic(HasStrictTraits):
     
     def plot(self, experiment, **kwargs):
         """Plot a faceted histogram view of a channel"""
+        
+        if not self.op._calibration_functions:
+            raise util.CytoflowViewError("No calibration found. "
+                                         "Did you forget to call estimate()?")
               
         beads_data = parse_tube(self.op.beads_file, experiment)
 
@@ -413,7 +418,6 @@ class BeadCalibrationDiagnostic(HasStrictTraits):
             peak_bins = scipy.signal.find_peaks_cwt(hist_smooth, 
                                                     widths = np.arange(5, 20),
                                                     max_distances = np.arange(5, 20) / 2)
-            print peak_bins
             
             # filter by height and intensity
             peak_threshold = np.percentile(hist_smooth, self.op.bead_peak_quantile)
@@ -423,7 +427,6 @@ class BeadCalibrationDiagnostic(HasStrictTraits):
                 
             plt.subplot(len(channels), 2, 2 * idx + 1)
             plt.xscale('log')
-            plt.xlim(10, 10000)
             plt.xlabel(channel)
             plt.plot(hist_bins[1:], hist_smooth)
             for peak in peak_bins_filtered:
