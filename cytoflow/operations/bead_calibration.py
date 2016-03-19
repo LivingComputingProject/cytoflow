@@ -24,7 +24,7 @@ Created on Aug 31, 2015
 from __future__ import division, absolute_import
 
 from traits.api import (HasStrictTraits, Str, CStr, File, Dict, Python,
-                        Instance, Int, List, Float, Constant, provides)
+                        Instance, Int, List, Float, Constant, Array, provides)
 import numpy as np
 import math
 import scipy.signal
@@ -58,6 +58,10 @@ class BeadCalibrationOp(HasStrictTraits):
     not do its own gating (maybe a future addition?)  In the meantime, 
     I recommend gating the *acquisition* on the FSC/SSC channels in order
     to get rid of debris, cells, and other noise.
+    
+    Also, this module assumes that the right-most peak is the brightest peak
+    in the tube.  If you have your PMT voltages so high that you have multiple
+    peaks off-scale at the top, this calibration will not be valid.
     
     Finally, because you can't have a negative number of fluorescent molecules
     (MEFLs, etc) (as well as for math reasons), this module filters out
@@ -95,9 +99,9 @@ class BeadCalibrationOp(HasStrictTraits):
     -----
     The peak finding is rather sophisticated.  
     
-    For each channel, a 256-bin histogram is computed on the log-transformed
+    For each channel, a 1024-bin histogram is computed on the log-transformed
     bead data, and then the histogram is smoothed with a Savitzky-Golay 
-    filter (with a window length of 5 and a polynomial order of 1).  
+    filter (with a window length of 7 and a polynomial order of 0).  
     
     Next, a wavelet-based peak-finding algorithm is used: it convolves the
     smoothed histogram with a series of wavelets and looks for relative 
@@ -110,11 +114,9 @@ class BeadCalibrationOp(HasStrictTraits):
     `bead_brightness_threshold`).
     
     How to convert from a series of peaks to mean equivalent fluorochrome?
-    If there's one peak, we assume that it's the brightest peak.  If there
-    are two peaks, we assume they're the brightest two.  If there are n >=3
-    peaks, we check all the contiguous n-subsets of the bead intensities
-    and find the one whose linear regression (in log space!) has the smallest
-    norm (square-root sum-of-squared-residuals.)
+    We assume that the brightest peak is the brightest bead population, then
+    do a linear regression of the (log-transformed) peak locations vs the
+    (log-transformed) MEFs.
     
     There's a slight subtlety in the fact that we're performing the linear
     regression in log-space: if the relationship in log10-space is Y=aX + b,
@@ -161,10 +163,11 @@ class BeadCalibrationOp(HasStrictTraits):
     
     beads = Dict(Str, List(Float), transient = True)
 
-    #_coefficients = Dict(Str, Python)
     _calibration_functions = Dict(Str, Python)
-    _peaks = Dict(Str, Python)
-    _mefs = Dict(Str, Python)
+    
+    # keep track of peaks and mefs for diagnostic plot
+    _peaks = Dict(Str, Array)
+    _mefs = Dict(Str, Array)
 
     def estimate(self, experiment, subset = None): 
         """
@@ -190,7 +193,7 @@ class BeadCalibrationOp(HasStrictTraits):
             
             # bin the data on a log scale
             data_range = experiment.metadata[channel]['range']
-            hist_bins = np.logspace(1, math.log(data_range, 2), num = 256, base = 2)
+            hist_bins = np.logspace(1, math.log(data_range, 2), num = 1024, base = 2)
             hist = np.histogram(data, bins = hist_bins)
             
             # mask off-scale values
@@ -198,12 +201,12 @@ class BeadCalibrationOp(HasStrictTraits):
             hist[0][-1] = 0
             
             # smooth it with a Savitzky-Golay filter
-            hist_smooth = scipy.signal.savgol_filter(hist[0], 5, 1)
+            hist_smooth = scipy.signal.savgol_filter(hist[0], 7, 0)
             
             # find peaks
             peak_bins = scipy.signal.find_peaks_cwt(hist_smooth, 
-                                                    widths = np.arange(3, 20),
-                                                    max_distances = np.arange(3, 20) / 2)
+                                                    widths = np.arange(5, 20),
+                                                    max_distances = np.arange(5, 20) / 2)
             
             # filter by height and intensity
             peak_threshold = np.percentile(hist_smooth, self.bead_peak_quantile)
@@ -226,54 +229,44 @@ class BeadCalibrationOp(HasStrictTraits):
             elif len(peaks) > len(self.beads):
                 raise util.CytoflowOpError("Found too many peaks; check the diagnostic plot")
             elif len(peaks) == 1:
-                # if we only have one peak, assume it's the brightest peak
+                # if we only have one peak, so just assume a multiplicative conversion
                 a = mef[-1] / peaks[0]
                 self._peaks[channel] = peaks
                 self._mefs[channel] = [mef[-1]]
                 self._calibration_functions[channel] = lambda x, a=a: a * x
-            elif len(peaks) == 2:
-                # if we have only two peaks, assume they're the brightest two
-                self._peaks[channel] = peaks
-                self._mefs[channel] = [mef[-1], mef[-2]]
-                a = (mef[-1] - mef[-2]) / (peaks[1] - peaks[0])
-                self._calibration_functions[channel] = lambda x, a=a: a * x
             else:
-                # if there are n > 2 peaks, check all the contiguous n-subsets
-                # of mef for the one whose linear regression with the peaks
-                # has the smallest (norm) sum-of-residuals.
-                
+                # if there are n >= 2 peaks, assume that the brighest peak is
+                # the brightest bead population and do a (log)linear regression
+                # to find the transformation
+                 
                 # do it in log10 space because otherwise the brightest peaks
                 # have an outsized influence.
-                
-                best_resid = np.inf
-                for start, end in [(x, x+len(peaks)) for x in range(len(mef) - len(peaks) + 1)]:
-                    mef_subset = mef[start:end]
-                    
-                    # linear regression of the peak locations against mef subset
-                    lr = np.polyfit(np.log10(peaks), 
-                                    np.log10(mef_subset), 
-                                    deg = 1, 
-                                    full = True)
-                    
-                    resid = lr[1][0]
-                    if resid < best_resid:
-                        best_lr = lr[0]
-                        best_resid = resid
-                        self._peaks[channel] = peaks
-                        self._mefs[channel] = mef_subset
-                        
-                
+ 
+                num_peaks = len(peaks)
+                mef_subset = mef[len(mef) - num_peaks:]
+                print mef_subset
+                print mef
+                     
+                # linear regression of the peak locations against mef subset
+                lr = np.polyfit(np.log10(peaks), 
+                                np.log10(mef_subset), 
+                                deg = 1, 
+                                full = True)
+ 
+                self._peaks[channel] = peaks
+                self._mefs[channel] = mef_subset
+                         
                 # remember, these (linear) coefficients came from logspace, so 
                 # if the relationship in log10 space is Y = aX + b, then in
                 # linear space the relationship is x = 10**X, y = 10**Y,
                 # and y = (10**b) * x ^ a
-                
+                 
                 # also remember that the result of np.polyfit is a list of
                 # coefficients with the highest power first!  so if we
                 # solve y=ax + b, coeff #0 is a and coeff #1 is b
-                
-                a = best_lr[0]
-                b = 10 ** best_lr[1]
+                 
+                a = lr[0][0]
+                b = 10 ** lr[0][1]
                 self._calibration_functions[channel] = \
                     lambda x, a=a, b=b: b * np.power(x, a)
 
@@ -395,7 +388,7 @@ class BeadCalibrationDiagnostic(HasStrictTraits):
     
     def plot(self, experiment, **kwargs):
         """Plot a faceted histogram view of a channel"""
-      
+              
         beads_data = parse_tube(self.op.beads_file, experiment)
 
         plt.figure()
@@ -407,19 +400,20 @@ class BeadCalibrationDiagnostic(HasStrictTraits):
             
             # bin the data on a log scale
             data_range = experiment.metadata[channel]['range']
-            hist_bins = np.logspace(1, math.log(data_range, 2), num = 256, base = 2)
+            hist_bins = np.logspace(1, math.log(data_range, 2), num = 1024, base = 2)
             hist = np.histogram(data, bins = hist_bins)
             
             # mask off-scale values
             hist[0][0] = 0
             hist[0][-1] = 0
             
-            hist_smooth = scipy.signal.savgol_filter(hist[0], 5, 1)
+            hist_smooth = scipy.signal.savgol_filter(hist[0], 7, 0)
             
             # find peaks
             peak_bins = scipy.signal.find_peaks_cwt(hist_smooth, 
-                                                    widths = np.arange(3, 20),
-                                                    max_distances = np.arange(3, 20) / 2)
+                                                    widths = np.arange(5, 20),
+                                                    max_distances = np.arange(5, 20) / 2)
+            print peak_bins
             
             # filter by height and intensity
             peak_threshold = np.percentile(hist_smooth, self.op.bead_peak_quantile)
@@ -429,20 +423,24 @@ class BeadCalibrationDiagnostic(HasStrictTraits):
                 
             plt.subplot(len(channels), 2, 2 * idx + 1)
             plt.xscale('log')
+            plt.xlim(10, 10000)
             plt.xlabel(channel)
             plt.plot(hist_bins[1:], hist_smooth)
             for peak in peak_bins_filtered:
                 plt.axvline(hist_bins[peak], color = 'r')
 
             plt.subplot(len(channels), 2, 2 * idx + 2)
+            for mef in self.op.beads[self.op.units[channel]]:
+                plt.axhline(mef, color = 'c')
             plt.xscale('log')
             plt.yscale('log')
-            plt.xlabel(self.op.units[channel])
-            plt.ylabel(channel)
+            plt.xlabel(channel)
+            plt.ylabel(self.op.units[channel])
             plt.plot(self.op._peaks[channel], 
                      self.op._mefs[channel], 
-                     marker = 'o')
-            
+                     marker = 'o',
+                     linestyle = "")
+              
             xmin, xmax = plt.xlim()
             x = np.logspace(np.log10(xmin), np.log10(xmax))
             plt.plot(x, 
