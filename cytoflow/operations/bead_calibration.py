@@ -155,6 +155,7 @@ class BeadCalibrationOp(HasStrictTraits):
     
     name = CStr()
     units = Dict(Str, Str)
+    unit_scale = Dict(Str, Float)
     
     beads_file = File(transient = True)
     bead_peak_quantile = Int(80)
@@ -214,8 +215,13 @@ class BeadCalibrationOp(HasStrictTraits):
                 [x for x in peak_bins if hist_smooth[x] > peak_threshold 
                  and hist[1][x] > self.bead_brightness_threshold]
             
-            self._peaks[channel] = peaks = [hist_bins[x] for x in peak_bins_filtered]
+            scale = self.unit_scale[channel] if channel in self.unit_scale else 1.0
+            peaks = [hist_bins[x] for x in peak_bins_filtered]
+#         
+#             if channel in self.unit_scale:
+#                 peaks = peaks.divide(self.unit_scale[channel])
             
+            self._peaks[channel] = peaks
             mef_unit = self.units[channel]
             
             # "mean equivalent fluorochrome"
@@ -258,11 +264,11 @@ class BeadCalibrationOp(HasStrictTraits):
                
                 # we used to use the entire (log)linear regression, but the 
                 # (log) part introduced nonlinearities which were bad.   
-#                 b = 10 ** lr[0][1]
-#                 self._calibration_functions[channel] = \
-#                     lambda x, a=a, b=b: b * np.power(x, a)
+                #  b = 10 ** lr[0][1]
+                #  self._calibration_functions[channel] = \
+               #      lambda x, a=a, b=b: b * np.power(x, a)
                     
-#                 # now, we use a simple multiplicative scale
+                # now, we use a simple multiplicative scale
                 def mef_err(x):
                     return np.sqrt(np.sum(np.square(np.log10(x * self._peaks[channel]) 
                                                   - np.log10(self._mefs[channel]))))
