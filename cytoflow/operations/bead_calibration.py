@@ -156,6 +156,7 @@ class BeadCalibrationOp(HasStrictTraits):
     name = CStr()
     units = Dict(Str, Str)
     unit_scale = Dict(Str, Float)
+    channel_scale = Dict(Str, Float)
     
     beads_file = File(transient = True)
     bead_peak_quantile = Int(80)
@@ -217,9 +218,9 @@ class BeadCalibrationOp(HasStrictTraits):
             
             scale = self.unit_scale[channel] if channel in self.unit_scale else 1.0
             peaks = [hist_bins[x] for x in peak_bins_filtered]
-#         
-#             if channel in self.unit_scale:
-#                 peaks = peaks.divide(self.unit_scale[channel])
+         
+            if channel in self.unit_scale:
+                peaks = [x / self.unit_scale[channel] for x  in peaks]
             
             self._peaks[channel] = peaks
             mef_unit = self.units[channel]
@@ -325,6 +326,10 @@ class BeadCalibrationOp(HasStrictTraits):
             calibration_fn = self._calibration_functions[channel]
             
             new_experiment[channel] = calibration_fn(new_experiment[channel])
+            
+            if channel in self.channel_scale:
+                new_experiment[channel] = new_experiment[channel].divide(self.channel_scale[channel])
+            
             new_experiment.metadata[channel]['bead_calibration_fn'] = calibration_fn
             new_experiment.metadata[channel]['units'] = self.units[channel]
             if 'range' in experiment.metadata[channel]:
