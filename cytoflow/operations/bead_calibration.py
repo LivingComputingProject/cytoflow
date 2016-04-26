@@ -37,7 +37,7 @@ import cytoflow.views
 import cytoflow.utility as util
 
 from .i_operation import IOperation
-from .import_op import parse_tube
+from .import_op import check_tube, Tube, ImportOp
 
 @provides(IOperation)
 class BeadCalibrationOp(HasStrictTraits):
@@ -187,12 +187,19 @@ class BeadCalibrationOp(HasStrictTraits):
         if not set(self.units.values()) <= set(self.beads.keys()):
             raise util.CytoflowOpError("Units don't match beads.")
         
-        beads_data = parse_tube(self.beads_file, experiment)
+        # make a little Experiment
+        check_tube(self.beads_file, experiment)
+        beads_exp = ImportOp(tubes = [Tube(file = self.beads_file)],
+                             name_metadata = experiment.metadata['name_metadata']).apply()
+                             
+        # unlike other operations, we DON'T apply the history to the beads (-;
         channels = self.units.keys()
 
         for channel in channels:
-            data = beads_data[channel]
-                        
+            data = beads_exp.data[channel]
+            
+            # TODO - this assumes the data is on a linear scale.  check it!
+            
             # bin the data on a log scale
             data_range = experiment.metadata[channel]['range']
             hist_bins = np.logspace(1, math.log(data_range, 2), num = 1024, base = 2)
@@ -405,14 +412,17 @@ class BeadCalibrationDiagnostic(HasStrictTraits):
             raise util.CytoflowViewError("No calibration found. "
                                          "Did you forget to call estimate()?")
               
-        beads_data = parse_tube(self.op.beads_file, experiment)
+        # make a little Experiment
+        check_tube(self.op.beads_file, experiment)
+        beads_exp = ImportOp(tubes = [Tube(file = self.op.beads_file)],
+                             name_metadata = experiment.metadata['name_metadata']).apply()
 
         plt.figure()
         
         channels = self.op.units.keys()
         
         for idx, channel in enumerate(channels):
-            data = beads_data[channel]
+            data = beads_exp.data[channel]
             
             # bin the data on a log scale
             data_range = experiment.metadata[channel]['range']
