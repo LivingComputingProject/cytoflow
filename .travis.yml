@@ -1,11 +1,10 @@
 language: generic
 
-matrix:
-  include:
-    - os: linux
-      sudo: false
-    - os: osx
-      osx_image: xcode6.4
+os:
+  - linux
+  - osx
+
+sudo: false
 
 addons:
   apt:
@@ -32,6 +31,7 @@ before_install:
   - ./miniconda.sh -b
   - export PATH=/Users/travis/miniconda/bin:/home/travis/miniconda2/bin:$PATH
   - conda update --yes conda
+  - which python
 
 install:
   - conda install --yes --quiet --file=packaging/conda-requirements.txt
