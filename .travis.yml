@@ -4,6 +4,11 @@ matrix:
   include:
     - os: linux
       sudo: false
+      env: DIST=precise
+    - os: linux
+      sudo: false
+      dist: trusty
+      env: DIST=trusty
     - os: osx
       osx_image: xcode6.4
 
@@ -42,7 +47,7 @@ install:
   - python `which pyinstaller` --log-level=DEBUG packaging/pyinstaller.spec
   - pyi-archive_viewer -l dist/cytoflow
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cd dist/; zip -r cytoflow.macos.zip Cytoflow.app/; rm -rf Cytoflow.app cytoflow; cd ..; fi
-  - if [[ "$TRAVIS_OS_NAME" != "osx" ]]; then mv dist/cytoflow dist/cytoflow-linux.x86_64; fi
+  - if [[ "$TRAVIS_OS_NAME" != "osx" ]]; then mv dist/cytoflow dist/cytoflow-linux.${DIST}; fi
   - ls -al dist/*
 
 script: nose2 -c packaging/nose2.cfg
