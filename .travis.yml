@@ -6,7 +6,7 @@ matrix:
       sudo: false
       env: DIST=precise
     - os: linux
-      sudo: false
+      sudo: required
       dist: trusty
       env: DIST=trusty
     - os: osx
