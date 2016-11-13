@@ -28,3 +28,5 @@ from .scale import scale_factory, IScale
 from .custom_traits import PositiveInt, PositiveFloat, ScaleEnum, Deprecated, Removed
 
 from .matplotlib_widgets import PolygonSelector
+
+from .facet_grid import MultiIndexGrid

@@ -137,35 +137,35 @@ class HistogramView(HasStrictTraits):
         xmin = bottleneck.nanmin(scaled_data)
         xmax = bottleneck.nanmax(scaled_data)
                     
-        if (self.huefacet 
-            and "bins" in experiment.metadata[self.huefacet]
-            and experiment.metadata[self.huefacet]["bin_scale"] == self.scale):
-            # if we color facet by the result of a BinningOp and we don't
-            # match the BinningOp bins with the histogram bins, we get
-            # gnarly aliasing.
-            
-            # each color gets at least one bin.  however, if the estimated
-            # number of bins for the histogram is much larger than the
-            # number of colors, sub-divide each color into multiple bins.
-            bins = experiment.metadata[self.huefacet]["bins"]
-            bins = np.append(bins, xmax)
-            
-            num_hues = len(data[self.huefacet].unique())
-            bins_per_hue = math.ceil(num_bins / num_hues)
-            
-            new_bins = [xmin]
-            for end in [b for b in bins if (b > xmin and b <= xmax)]:
-                new_bins = np.append(new_bins,
-                                     np.linspace(new_bins[-1],
-                                                 end,
-                                                 bins_per_hue + 1,
-                                                 endpoint = True)[1:])
-
-            bins = scale.inverse(new_bins)
-        else:
-            bin_width = (xmax - xmin) / num_bins
-            bins = scale.inverse(np.arange(xmin, xmax, bin_width))
-            bins = np.append(bins, scale.inverse(xmax))
+#         if (self.huefacet 
+#             and "bins" in experiment.metadata[self.huefacet]
+#             and experiment.metadata[self.huefacet]["bin_scale"] == self.scale):
+#             # if we color facet by the result of a BinningOp and we don't
+#             # match the BinningOp bins with the histogram bins, we get
+#             # gnarly aliasing.
+#             
+#             # each color gets at least one bin.  however, if the estimated
+#             # number of bins for the histogram is much larger than the
+#             # number of colors, sub-divide each color into multiple bins.
+#             bins = experiment.metadata[self.huefacet]["bins"]
+#             bins = np.append(bins, xmax)
+#             
+#             num_hues = len(data[self.huefacet].unique())
+#             bins_per_hue = math.ceil(num_bins / num_hues)
+#             
+#             new_bins = [xmin]
+#             for end in [b for b in bins if (b > xmin and b <= xmax)]:
+#                 new_bins = np.append(new_bins,
+#                                      np.linspace(new_bins[-1],
+#                                                  end,
+#                                                  bins_per_hue + 1,
+#                                                  endpoint = True)[1:])
+# 
+#             bins = scale.inverse(new_bins)
+#         else:
+        bin_width = (xmax - xmin) / num_bins
+        bins = scale.inverse(np.arange(xmin, xmax, bin_width))
+        bins = np.append(bins, scale.inverse(xmax))
             
         # take care of a rare rounding error, where the first observation is
         # less than the first bin or the last observation is more than the last 
@@ -178,18 +178,18 @@ class HistogramView(HasStrictTraits):
         # mask out the data that's not in the scale domain
         data = data[~np.isnan(scaled_data)]
 
-        g = sns.FacetGrid(data, 
-                          size = 6,
-                          aspect = 1.5,
-                          col = (self.xfacet if self.xfacet else None),
-                          row = (self.yfacet if self.yfacet else None),
-                          hue = (self.huefacet if self.huefacet else None),
-#                           col_order = (np.sort(data[self.xfacet].unique()) if self.xfacet else None),
-#                           row_order = (np.sort(data[self.yfacet].unique()) if self.yfacet else None),
-#                           hue_order = (np.sort(data[self.huefacet].unique()) if self.huefacet else None),
-                          legend_out = False,
-                          sharex = False,
-                          sharey = False)
+        g = util.MultiIndexGrid(data, 
+                                size = 6,
+                                aspect = 1.5,
+                                col = (self.xfacet if self.xfacet else None),
+                                row = (self.yfacet if self.yfacet else None),
+                                hue = (self.huefacet if self.huefacet else None),
+#                             col_order = (np.sort(data[self.xfacet].unique()) if self.xfacet else None),
+#                             row_order = (np.sort(data[self.yfacet].unique()) if self.yfacet else None),
+#                             hue_order = (np.sort(data[self.huefacet].unique()) if self.huefacet else None),
+                                legend_out = False,
+                                sharex = False,
+                                sharey = False)
         
         # set the scale for each set of axes; can't just call plt.xscale() 
         for ax in g.axes.flatten():

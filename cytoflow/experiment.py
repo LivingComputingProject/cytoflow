@@ -19,7 +19,7 @@ from __future__ import absolute_import
 
 import pandas as pd
 from traits.api import HasStrictTraits, Dict, List, Instance, Str, Any, \
-                       Property, cached_property, Tuple
+                       Property, Tuple
 
 import cytoflow.utility as util
 
@@ -166,7 +166,6 @@ class Experiment(HasStrictTraits):
         try:
             return {name : pd.Series(idx.get_level_values(name).unique()) 
                     for name in idx.names if name}
-#                     if name}
         except AttributeError:
             return []
         
