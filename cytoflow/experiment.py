@@ -28,13 +28,15 @@ class Experiment(HasStrictTraits):
     
     An `Experiment` is `cytoflow`'s central data structure: it wraps a 
     `pandas.DataFrame` containing all the data from a flow experiment. Each 
-    row in the table is an event.  Each column is either a measurement from one 
-    of the detectors (or a "derived" measurement such as a transformed value or
-    a ratio), or a piece of metadata associated with that event: which 
-    tube it came from, what the experimental conditions for that tube were, 
-    gate membership, etc.  The `Experiment` object lets you:
-      - Add additional metadata to define subpopulations
-      - Get events that match a particular metadata signature.
+    row in the table is an event.  Each column is a measurement from one of the 
+    detectors (or a "derived" measurement such as a transformed value or a 
+    ratio).  Experimental conditions are represented as levels in a hierarchical
+    `pandas.MultiIndex` and are pieces of metadata associated with that event: 
+    which tube it came from, what the experimental conditions for that tube 
+    were, gate membership, etc.  Each condition's name must be a valid Python
+    identifier.  The `Experiment` object lets you:
+      - Add additional conditions to define subpopulations
+      - Get events that match a particular set of conditions.
       
     Additionally, the `Experiment` object manages channel- and experiment-level
     metadata in the `metadata` field, which is a dictionary.  This allows
@@ -51,36 +53,18 @@ class Experiment(HasStrictTraits):
 
     data : pandas.DataFrame
         the `DataFrame` representing all the events and metadata.  Each event
-        is a row; each column is either a measured channel (ie a fluorescence
-        measurement), a derived channel (eg the ratio between two channels), or
-        a piece of metadata.  Metadata can be either experimental conditions 
-        (eg induction level, timepoint) or added by operations (eg gate 
-        membership).
+        is a row; each column is a channel (PMT measurements or "derived"
+        channels such as transformed values or ratios.)  Experimental conditions
+        and metadata from the analysis (gate membership, etc) are stored as
+        levels in `data`'s index, which is a `pandas.MultiIndex`.
         
-    metadata : Dict(Str : Any)
-        The experimental metadata.  In particular, each column in self.data has
-        an entry whose key is the column name and whose value is a dict of
-        column-specific metadata. Operations may define their own metadata, 
-        which is occasionally useful if modules are expected to work together.
-        An incomplete list of column-specific metadata:
-        * type (Enum: "channel", "category", "float", "int", "bool") : what kind
-            of data is stored in this column?  If the column is event
-            measurement data (raw, transformed, or derived), then the value is 
-            "channel".  If the column is per-event metadata, then the value is
-            a NumPy `dtype` -- `category`, `float`, `int`, or `bool`.
-        * voltage (int) : for raw channels, the detector voltage used. from the 
-            FCS keyword "$PnV".
-        * range (float) : for raw and transformed channels, the maximum possible
-            value.  from the FCS keyword "$PnR"
-        * xforms, xforms_inv: for channels, a list of (parameterized!) 
-            transformations that have been applied.  each must be a
-            one-parameter function that takes either a single value or a list 
-            of values and applies the transformation (or inverse).  necessary
-            for computing tic marks on plots, among other things.
-            
-        Note! There may be *other* experiment-wide things in `metadata`; 
-        the fact that a key is in `metadata` does not mean a corresponding
-        column exists in `data`.
+    metadata : Dict(Str : Dict)
+        Per-channel information about the data in the Experiment.  Each column
+        in self.data has an entry whose key is the column name and whose value
+        is a dict of channel-specific metadata.  Metadata is added by
+        operations, which is occasionally useful if modules are expected to
+        work together.  Each module's documentation should specify which
+        metadata it adds.
     
     history : List(IOperation)
         A list of the operations that have been applied to the raw data that
@@ -90,21 +74,18 @@ class Experiment(HasStrictTraits):
         A dictionary of statistics and parameters computed by models that were
         fit to the data.  The key is an (Str, Str) tuple, where the first Str
         is the name of the operation that supplied the statistic, and the second
-        Str is the name of the statistic. The value is a multi-indexed pandas
-        Series: each level of the index is a facet, and each combination of
-        indices is a subset for which the statistic was computed.  The values 
-        of the series, of course, are the values of the computed parameters or
-        statistics for each subset.
+        Str is the name of the statistic. The value is a multi-indexed 
+        `pandas.Series`: each level of the index is an experimental condition, 
+        and each row is a subset for which the statistic was computed.
     
     channels : List(String)
         A read-only `List` containing the channels that this experiment tracks.
     
-    conditions : Dict(String : String)
+    conditions : Dict(String : pandas.Series)
         A read-only Dict of the experimental conditions and analysis metadata 
         (gate membership, etc) and that this experiment tracks.  The key is the 
-        name of the condition, and the value is the string representation of the 
-        `numpy` dtype (usually one of "category", "float", "int" or "bool".)
-
+        name of the condition, and the value is a `pandas.Series` containing
+        all of the values of this condition.
 
     Implementation details
     ----------------------
@@ -128,7 +109,7 @@ class Experiment(HasStrictTraits):
     To maintain the ease of use, we'll override __getitem__ and pass it to
     the wrapped DataFrame.  We'll do the same with some of the more useful
     DataFrame API pieces (like query()); and of course, you can just get the
-    data frame itself with Experiment.data
+    data frame itself with `Experiment.data`
     
     Examples
     --------
@@ -156,15 +137,15 @@ class Experiment(HasStrictTraits):
     data = Instance(pd.DataFrame, args=())
     
     # potentially mutable.  deep copy required
-    metadata = Dict(Str, Any, copy = "deep")
+    metadata = Dict(Str, Dict(Str, Any), copy = "deep")
     
     # statistics.  mutable, deep copy required
     statistics = Dict(Tuple(Str, Str), pd.Series, copy = "deep")
     
-    history = List(Any)
+    history = List(HasStrictTraits)
     
-    channels = Property(List, depends_on = "metadata")
-    conditions = Property(Dict, depends_on = "metadata")
+    channels = Property(List)
+    conditions = Property(Dict(Str, pd.Series))
             
     def __getitem__(self, key):
         """Override __getitem__ so we can reference columns like ex.column"""
@@ -177,28 +158,22 @@ class Experiment(HasStrictTraits):
     def __len__(self):
         return len(self.data)
 
-    
-    @cached_property
     def _get_channels(self):
-        return [x for x in self.metadata
-                if x in self.data
-                and self.metadata[x]['type'] == "channel"]
+        return self.data.columns.values
     
-    @cached_property
     def _get_conditions(self):
-        return {x : self.metadata[x]['type'] for x in self.metadata
-                if x in self.data
-                and self.metadata[x]['type'] != "channel"}
+        idx = self.data.index
+        try:
+            return {name : pd.Series(idx.get_level_values(name).unique()) 
+                    for name in idx.names if name}
+#                     if name}
+        except AttributeError:
+            return []
         
     def subset(self, name, value):
         """
         A fast way to get a subset of the data where a condition equals a 
         particular value.
-        
-        This method "sanitizes" column names first, replacing characters that
-        are not valid in a Python identifier with an underscore '_'. So, the
-        column name `a column` becomes `a_column`, and can be queried with
-        an `a_column == True` or such.
         
         Parameters
         ----------
@@ -209,15 +184,8 @@ class Experiment(HasStrictTraits):
             The value to look for.  Will be checked with equality, ie `==`
             
         """
-        new_name = util.sanitize_identifier(name)
-        
-        if new_name not in self.conditions:
-            raise util.CytoflowError("Can't find condition '{}'"
-                                     .format(name))
-            
         ret = self.clone()
-        ret.data = self.data[ self.data[new_name] == value ]
-        ret.data.reset_index(drop = True, inplace = True)
+        ret.data = self.data.xs(value, name, drop_level = False)
         return ret
     
     
@@ -225,10 +193,11 @@ class Experiment(HasStrictTraits):
         """
         Expose pandas.DataFrame.query() to the outside world.
 
-        This method "sanitizes" column names first, replacing characters that
-        are not valid in a Python identifier with an underscore '_'. So, the
-        column name `a column` becomes `a_column`, and can be queried with
-        an `a_column == True` or such.
+        You can refer to both conditions and channels with `query`.  This method
+        "sanitizes" column names first, replacing characters that are not valid
+        in a Python identifier (`A-Z`, `a-z`, `0-9` and `_`) with an underscore
+        `_`. So, the column name `FITC-A` becomes `FITC_A`, and can be queried
+        with `FITC_A > 0.0` or such.
         
         Parameters
         ----------
@@ -284,7 +253,8 @@ class Experiment(HasStrictTraits):
         Parameters
         ----------
         name : String
-            The name of the new column in `self.data`.
+            The name of the new condition.  Must be a valid Python identifier,
+            containing characters only in `A-Z`, `a-z`, `0-9` and `_`.
         
         dtype : String
             The type of the new column in `self.data`.  Must be a string that
@@ -311,10 +281,16 @@ class Experiment(HasStrictTraits):
         >>> ex.add_condition("Time", "float")
         >>> ex.add_condition("Strain", "category")      
         """
+
+        if name != util.sanitize_identifier(name):
+            raise util.CytoflowError("The name '{}' must be a valid Python "
+                                     "identifier".format(name))
         
-        if name in self.data:
-            raise util.CytoflowError("Already a column named {0} in self.data"
-                                     .format(name))
+        if name in self.channels:
+            raise util.CytoflowError("Already a channel named {}".format(name))
+        
+        if name in self.conditions:
+            raise util.CytoflowError("Already a condition named {}".format(name))
         
         if data is None and len(self) > 0:
             raise util.CytoflowError("If data is None, self.data must be empty!")
@@ -322,17 +298,16 @@ class Experiment(HasStrictTraits):
         if data is not None and len(self) != len(data):
             raise util.CytoflowError("data must be the same length as self.data")
         
-        try:
-            if data is not None:
-                self.data[name] = data.astype(dtype, copy = True)
+        if data is not None:
+            self.data[name] = data.astype(dtype, copy = True)
+        else:
+            if dtype == "category":
+                self.data[name] = pd.Series(dtype = "object")
             else:
                 self.data[name] = pd.Series(dtype = dtype)
             
-            self.metadata[name] = {}
-            self.metadata[name]['type'] = dtype                
-        except (ValueError, TypeError):
-                raise util.CytoflowError("Had trouble converting data to type {0}"
-                                    .format(dtype))
+        self.data.set_index(name, append = True, inplace = True)
+        self.data.sort_index(inplace = True)
             
     def add_channel(self, name, data = None):
         """Add a new column of per-event "data" (as opposed to metadata) to this
@@ -359,12 +334,14 @@ class Experiment(HasStrictTraits):
             
         Examples
         --------
-        >>> ex.add_channel("FSC_over_2", ex.data["FSC-A"] / 2.0) 
+        >>> ex.add_channel("FSC_over_2", ex["FSC-A"] / 2.0) 
         """
         
-        if name in self.data:
-            raise util.CytoflowError("Already a column named {0} in self.data"
-                                .format(name))
+        if name in self.channels:
+            raise util.CytoflowError("Already a channel named {}".format(name))
+            
+        if name in self.conditions:
+            raise util.CytoflowError("Already a condition named {}".format(name))
 
         if data is None and len(self) > 0:
             raise util.CytoflowError("If data is None, self.data must be empty!")
@@ -379,22 +356,18 @@ class Experiment(HasStrictTraits):
                 self.data[name] = pd.Series(dtype = "float64")
                 
             self.metadata[name] = {}
-            self.metadata[name]['type'] = "channel"
-            self.metadata[name]['xforms'] = []
-            self.metadata[name]['xforms_inv'] = []
                 
         except (ValueError, TypeError):
                 raise util.CytoflowError("Had trouble converting data to type \"float64\"")
         
-    def add_events(self, data, conditions):
+    def add_events(self, data, conditions, check_conditions = True):
         """
         Add new events to this Experiment.
         
-        Each new event in `data` is appended to `self.data`, and its per-event
-        metadata columns will be set with the values specified in `conditions`.
-        Thus, it is particularly useful for adding tubes of data to new
-        experiments, before additional per-event metadata is added by gates,
-        etc.
+        This function adds appropriate index levels to `data` with values from
+        `conditions`, then appends it to `self.data`.  Thus, it is particularly
+        useful for adding tubes of data to new experiments, before additional
+        per-event metadata is added by gates, etc.
         
         EVERY column in `self.data` must be accounted for.  Each column of
         type `channel` must appear in `data`; each column of metadata must
@@ -409,7 +382,11 @@ class Experiment(HasStrictTraits):
         conditions : Dict(Str, Any)
             A dictionary of the tube's metadata.  The keys must match 
             `self.conditions`, and the values must be coercable to the
-            relevant `numpy` dtype.
+            relevant `numpy.dtype`.
+            
+        check_conditions : Bool (default = True)
+            If `True` (the default), throw an error if the conditions in
+            `conditions` have already been added to the experiment.
  
         Raises
         ------
@@ -420,6 +397,8 @@ class Experiment(HasStrictTraits):
               the experiment, or vice versa.
             - If there is metadata specified in `conditions` that can't be
               converted to the corresponding metadata dtype.
+            - If `check_conditions` is `True` and events with the same 
+              conditions have already been added to the Experiment.
             
         Examples
         --------
@@ -445,8 +424,9 @@ class Experiment(HasStrictTraits):
 
         if( any(True for k in conditions if k not in self.conditions) or \
             any(True for k in self.conditions if k not in conditions) ):
-            raise util.CytoflowError("Metadata for this tube isn't the same as "
-                                "self.conditions")
+            raise util.CytoflowError("Conditions {} don't match the experiment's "
+                                     "conditions {}"
+                                     .format(conditions.keys(), self.conditions.keys()))
             
         # add the conditions to tube's internal data frame.  specify the conditions
         # dtype using self.conditions.  check for errors as we do so.
@@ -467,20 +447,21 @@ class Experiment(HasStrictTraits):
                     pd.Series(data = [meta_value] * len(new_data),
                               index = new_data.index,
                               dtype = meta_type)
+                new_data.set_index(meta_name, append = True, inplace = True)
                 
                 # if we're categorical, merge the categories
-                if meta_type == "category" and meta_name in self.data.columns:
-                    cats = set(self.data[meta_name].cat.categories) | set(new_data[meta_name].cat.categories)
-                    self.data[meta_name] = self.data[meta_name].cat.set_categories(cats)
-                    new_data[meta_name] = new_data[meta_name].cat.set_categories(cats)
+#                 if meta_type == "category" and meta_name in self.data.columns:
+#                     cats = set(self.data[meta_name].cat.categories) | set(new_data[meta_name].cat.categories)
+#                     self.data[meta_name] = self.data[meta_name].cat.set_categories(cats)
+#                     new_data[meta_name] = new_data[meta_name].cat.set_categories(cats)
             except (ValueError, TypeError):
-                raise util.CytoflowError("Had trouble converting conditions {1}"
-                                         "(value = {2}) to type {3}" \
+                raise util.CytoflowError("Had trouble converting conditions {0}"
+                                         "(value = {1}) to type {2}" \
                                          .format(meta_name,
                                                  meta_value,
                                                  meta_type))
-        
-        self.data = self.data.append(new_data, ignore_index = True)
+#        self.data = self.data.append(new_data, ignore_index = True)
+        self.data = self.data.append(new_data)
         del new_data
 
 if __name__ == "__main__":
