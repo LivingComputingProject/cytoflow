@@ -38,9 +38,9 @@ import cytoflow.utility as util
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.ext_enum_editor import ExtendableEnumEditor
 from cytoflowgui.view_plugins.i_view_plugin \
-    import IViewPlugin, VIEW_PLUGIN_EXT, ViewHandlerMixin, PluginViewMixin
+    import IViewPlugin, VIEW_PLUGIN_EXT, ViewController, PluginViewMixin
     
-class HistogramHandler(Controller, ViewHandlerMixin):
+class HistogramHandler(ViewController):
     """
     docs
     """

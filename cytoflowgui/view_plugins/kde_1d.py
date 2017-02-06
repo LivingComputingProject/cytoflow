@@ -22,7 +22,7 @@ Created on Feb 24, 2015
 """
 
 from traits.api import provides, Callable, Str
-from traitsui.api import View, Item, Controller, EnumEditor, VGroup
+from traitsui.api import View, Item, Controller, EnumEditor, VGroup, ListEditor, InstanceEditor
 from envisage.api import Plugin, contributes_to
 from pyface.api import ImageResource
 
@@ -33,13 +33,12 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from cytoflowgui.subset_editor import SubsetEditor
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.ext_enum_editor import ExtendableEnumEditor
 from cytoflowgui.view_plugins.i_view_plugin \
-    import IViewPlugin, VIEW_PLUGIN_EXT, ViewHandlerMixin, PluginViewMixin
+    import IViewPlugin, VIEW_PLUGIN_EXT, ViewController, PluginViewMixin
     
-class Kde1DHandler(Controller, ViewHandlerMixin):
+class Kde1DHandler(ViewController):
     """
     docs
     """
@@ -71,9 +70,12 @@ class Kde1DHandler(Controller, ViewHandlerMixin):
                                 label = "Tab\nFacet"),
                             label = "1D Kernel Density Estimate",
                             show_border = False),
-                    VGroup(Item('subset_dict',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "context.conditions")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),

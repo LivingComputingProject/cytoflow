@@ -21,20 +21,19 @@ Created on Feb 24, 2015
 @author: brian
 """
 
-from traits.api import provides, Callable, Str
-from traitsui.api import View, Item, VGroup, Controller, EnumEditor
+from traits.api import provides, Callable
+from traitsui.api import View, Item, VGroup, Controller, EnumEditor, ListEditor, InstanceEditor
 from envisage.api import Plugin, contributes_to
 from pyface.api import ImageResource
 
 from cytoflow import BarChartView
 
-from cytoflowgui.subset_editor import SubsetEditor
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.ext_enum_editor import ExtendableEnumEditor
 from cytoflowgui.view_plugins.i_view_plugin \
-    import IViewPlugin, VIEW_PLUGIN_EXT, ViewHandlerMixin, StatisticViewHandlerMixin, PluginViewMixin
+    import IViewPlugin, VIEW_PLUGIN_EXT, ViewController, StatisticViewHandlerMixin, PluginViewMixin
         
-class BarChartHandler(Controller, ViewHandlerMixin, StatisticViewHandlerMixin):
+class BarChartHandler(ViewController, StatisticViewHandlerMixin):
     """
     docs
     """
@@ -68,9 +67,12 @@ class BarChartHandler(Controller, ViewHandlerMixin, StatisticViewHandlerMixin):
                                 label = "Error\nStatistic"),
                              label = "Bar Chart",
                              show_border = False),
-                    VGroup(Item('subset_dict',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "handler.levels")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),

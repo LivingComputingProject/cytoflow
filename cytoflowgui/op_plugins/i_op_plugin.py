@@ -21,11 +21,14 @@ Created on Mar 15, 2015
 @author: brian
 """
 import logging
+import pandas as pd
 
-from traits.api import Interface, Str, HasTraits, on_trait_change, Dict, List, Property
-from traitsui.api import Group, Item
+from traits.api import Interface, Str, HasTraits, on_trait_change, List, Property
+from traitsui.api import Group, Item, Controller
+import cytoflow.utility as util
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.util import DelayedEvent
+from cytoflowgui.subset import ISubset, BoolSubset, RangeSubset, CategorySubset
 
 OP_PLUGIN_EXT = 'edu.mit.synbio.cytoflow.op_plugins'
 
@@ -65,23 +68,19 @@ class IOperationPlugin(Interface):
 
 class PluginOpMixin(HasTraits):
     
-    subset_dict = Dict(Str, List, estimate = True)
-    subset = Property(Str, depends_on = "subset_dict")
+    subset_list = List(ISubset)
+    subset = Property(Str, depends_on = "subset_list.str")
         
     def _get_subset(self):
-        ret = []
-        for key, values in self.subset_dict.iteritems():
-            if values:
-                values = list(values)
-                values = ['"{}"'.format(x) if isinstance(x, basestring) else x for x in values]
-                values = ["{} == {}".format(key, x) for x in values]
-                values = " or ".join(values)
-                ret.append(values)
-        
-        ret = ["({})".format(x) for x in ret]
+        ret = [subset.str for subset in self.subset_list if subset.str]      
         ret = " and ".join(ret)
         
         return ret
+    
+    # the _changed listener below doesn't catch changes in lists
+    @on_trait_change("subset_list.str", post_init = True)
+    def _subset_changed(self):
+        self.changed = "api"
     
     changed = DelayedEvent(delay = 0.2)
     
@@ -160,9 +159,49 @@ shared_op_traits = Group(Item('context.estimate_warning',
                                                         background_color = "#ff9191")))
 
         
-class OpHandlerMixin(HasTraits):
+class OperationHandler(Controller):
     """
-    Useful bits for operation handlers.  Not currently used, but kept around
-    in case it's useful some day in the future.
+    Useful bits for operation handlers.
     """
+    
+    def init_info(self, info):
+        # initialize the view model's subset_list based on the workflow
+        # instance's conditions as well as its current contents.
+        wi = info.ui.context['context']
+        if not wi.previous:
+            return
+        
+        operation = self.model
+        op_names = set([subset.name for subset in operation.subset_list])
+        condition_names = set(wi.previous.conditions.keys())
+        
+        for name in op_names - condition_names:
+            # remove subsets that aren't in conditions
+            subset = next((x for x in operation.subset_list if x.name == name))
+            operation.subset_list.remove(subset)
+            
+        for name in condition_names - op_names:
+            # add subsets that are new conditions
+            values = wi.previous.conditions[name].sort_values()
+            dtype = pd.Series(list(values)).dtype
+            if dtype.kind == 'b':
+                subset = BoolSubset(name = name)
+            elif dtype.kind in "ifu":
+                subset = RangeSubset(name = name,
+                                     values = list(values))
+            elif dtype.kind in "OSU":
+                subset = CategorySubset(name = name,
+                                        values = list(values))
+            else:
+                raise util.CytoflowError("Unknown dtype {} in ViewHandlerMixin"
+                                         .format(dtype))
+             
+            operation.subset_list.append(subset)    
+        
+        for name in condition_names & op_names:
+            # update values for subsets we're already tracking
+            subset = next((x for x in operation.subset_list if x.name == name))
+            if set(subset.values) != set(wi.previous.conditions[name]):
+                subset.values = list(wi.previous.conditions[name].sort_values())
+        
 

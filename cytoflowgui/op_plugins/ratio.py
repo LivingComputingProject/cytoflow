@@ -23,9 +23,9 @@ from pyface.api import ImageResource
 from cytoflow.operations.ratio import RatioOp
 
 from cytoflowgui.op_plugins.i_op_plugin \
-    import IOperationPlugin, OpHandlerMixin, PluginOpMixin, OP_PLUGIN_EXT, shared_op_traits
+    import IOperationPlugin, OperationHandler, PluginOpMixin, OP_PLUGIN_EXT, shared_op_traits
 
-class RatioHandler(Controller, OpHandlerMixin):
+class RatioHandler(OperationHandler):
     def default_traits_view(self):
         return View(Item('name',
                          editor = TextEditor(auto_set = False)),

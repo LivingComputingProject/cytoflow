@@ -25,21 +25,20 @@ import numpy as np
 import pandas as pd
 
 from traits.api import provides, Callable, Event, on_trait_change, Instance
-from traitsui.api import View, Item, Controller, VGroup, ButtonEditor, EnumEditor
+from traitsui.api import View, Item, Controller, VGroup, ButtonEditor, EnumEditor, ListEditor, InstanceEditor
 from envisage.api import Plugin, contributes_to
 from pyface.api import ImageResource, FileDialog, OK
 
 from cytoflow import TableView
 import cytoflow.utility as util
 
-from cytoflowgui.subset_editor import SubsetEditor
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.ext_enum_editor import ExtendableEnumEditor
 from cytoflowgui.view_plugins.i_view_plugin \
-    import IViewPlugin, VIEW_PLUGIN_EXT, ViewHandlerMixin, StatisticViewHandlerMixin, PluginViewMixin
+    import IViewPlugin, VIEW_PLUGIN_EXT, ViewController, StatisticViewHandlerMixin, PluginViewMixin
 from cytoflowgui.util import DefaultFileDialog
 
-class TableHandler(Controller, ViewHandlerMixin, StatisticViewHandlerMixin):
+class TableHandler(ViewController, StatisticViewHandlerMixin):
     """
     docs
     """
@@ -71,9 +70,12 @@ class TableHandler(Controller, ViewHandlerMixin, StatisticViewHandlerMixin):
                                 enabled_when = 'result is not None'),
                            label = "Table View",
                            show_border = False),
-                    VGroup(Item('subset_dict',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "handler.levels")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),

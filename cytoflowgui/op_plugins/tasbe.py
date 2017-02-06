@@ -43,9 +43,8 @@ from cytoflow.operations.bead_calibration import BeadCalibrationOp
 from cytoflow.operations.color_translation import ColorTranslationOp
 from cytoflow.views.i_selectionview import IView
 
-from cytoflowgui.view_plugins.i_view_plugin import ViewHandlerMixin, PluginViewMixin
-from cytoflowgui.op_plugins import IOperationPlugin, OpHandlerMixin, OP_PLUGIN_EXT, shared_op_traits
-from cytoflowgui.subset_editor import SubsetEditor
+from cytoflowgui.view_plugins.i_view_plugin import ViewController, PluginViewMixin
+from cytoflowgui.op_plugins import IOperationPlugin, OperationHandler, OP_PLUGIN_EXT, shared_op_traits
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.op_plugins.i_op_plugin import PluginOpMixin
 from cytoflowgui.workflow_item import WorkflowItem
@@ -59,7 +58,7 @@ class _TranslationControl(HasTraits):
     to_channel = Str
     file = File
 
-class TasbeHandler(Controller, OpHandlerMixin):
+class TasbeHandler(OperationHandler):
                 
     beads_name_choices = Property(transient = True)
     beads_units = Property(depends_on = 'model.beads_name',
@@ -139,11 +138,12 @@ class TasbeHandler(Controller, OpHandlerMixin):
                                 style = 'custom'),
 
                         show_labels = False),
-                    VGroup(Item('subset_dict',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "context.previous.conditions",
-                                                      metadata = "context.previous.metadata",
-                                                      when = "'experiment' not in vars() or not experiment")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),
@@ -303,7 +303,7 @@ class TasbePluginOp(PluginOpMixin):
     def default_view(self, **kwargs):
         return TasbePluginView(op = self, **kwargs)
 
-class TasbeViewHandler(Controller, ViewHandlerMixin):
+class TasbeViewHandler(ViewController):
     def default_traits_view(self):
         return View(Item('name',
                          style = 'readonly'),

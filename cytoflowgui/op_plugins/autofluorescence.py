@@ -23,7 +23,7 @@ Created on Oct 9, 2015
 import warnings
 
 from traitsui.api import (View, Item, Controller, ButtonEditor, CheckListEditor,
-                          VGroup)
+                          VGroup, ListEditor, InstanceEditor)
 from envisage.api import Plugin, contributes_to
 from traits.api import provides, Callable, List, Str, \
                        File, on_trait_change
@@ -34,13 +34,12 @@ import cytoflow.utility as util
 from cytoflow.operations.autofluorescence import AutofluorescenceOp, AutofluorescenceDiagnosticView
 from cytoflow.views.i_selectionview import IView
 
-from cytoflowgui.view_plugins.i_view_plugin import ViewHandlerMixin, PluginViewMixin
-from cytoflowgui.op_plugins import IOperationPlugin, OpHandlerMixin, OP_PLUGIN_EXT, shared_op_traits
+from cytoflowgui.view_plugins.i_view_plugin import ViewController, PluginViewMixin
+from cytoflowgui.op_plugins import IOperationPlugin, OperationHandler, OP_PLUGIN_EXT, shared_op_traits
 from cytoflowgui.color_text_editor import ColorTextEditor
-from cytoflowgui.subset_editor import SubsetEditor
 from cytoflowgui.op_plugins.i_op_plugin import PluginOpMixin
 
-class AutofluorescenceHandler(Controller, OpHandlerMixin):
+class AutofluorescenceHandler(OperationHandler):
     
     def default_traits_view(self):
         return View(Item('blank_file',
@@ -49,11 +48,12 @@ class AutofluorescenceHandler(Controller, OpHandlerMixin):
                          editor = CheckListEditor(cols = 2,
                                                   name = 'context.previous.channels'),
                          style = 'custom'),
-                    VGroup(Item('subset_dict',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "context.previous.conditions",
-                                                      metadata = "context.previous.metadata",
-                                                      when = "'experiment' not in vars() or not experiment")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),
@@ -103,7 +103,7 @@ class AutofluorescencePluginOp(PluginOpMixin, AutofluorescenceOp):
         
         return True
 
-class AutofluorescenceViewHandler(Controller, ViewHandlerMixin):
+class AutofluorescenceViewHandler(ViewController):
     def default_traits_view(self):
         return View(Item('name',
                          style = 'readonly'),

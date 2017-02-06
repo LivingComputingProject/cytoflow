@@ -24,20 +24,19 @@ Created on Feb 24, 2015
 import pandas as pd
 
 from traits.api import provides, Callable, Property
-from traitsui.api import View, Item, Controller, EnumEditor, VGroup
+from traitsui.api import View, Item, Controller, EnumEditor, VGroup, ListEditor, InstanceEditor
 from envisage.api import Plugin, contributes_to
 from pyface.api import ImageResource
 
 from cytoflow import Stats2DView
 import cytoflow.utility as util
 
-from cytoflowgui.subset_editor import SubsetEditor
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.ext_enum_editor import ExtendableEnumEditor
 from cytoflowgui.view_plugins.i_view_plugin \
-    import IViewPlugin, VIEW_PLUGIN_EXT, ViewHandlerMixin, StatisticViewHandlerMixin, PluginViewMixin
+    import IViewPlugin, VIEW_PLUGIN_EXT, ViewController, StatisticViewHandlerMixin, PluginViewMixin
     
-class Stats2DHandler(Controller, ViewHandlerMixin, StatisticViewHandlerMixin):
+class Stats2DHandler(ViewController, StatisticViewHandlerMixin):
     """
     docs
     """
@@ -133,9 +132,12 @@ class Stats2DHandler(Controller, ViewHandlerMixin, StatisticViewHandlerMixin):
                                 label = "Y Error\nStatistic"),
                            label = "Two-Dimensional Statistics Plot",
                            show_border = False),
-                    VGroup(Item('subset_dict',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "handler.levels")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),

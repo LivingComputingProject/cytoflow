@@ -22,7 +22,8 @@ Created on Apr 25, 2015
 '''
 
 from traits.api import provides, Callable, Str, Instance, DelegatesTo
-from traitsui.api import View, Item, EnumEditor, Controller, VGroup, TextEditor
+from traitsui.api import View, Item, EnumEditor, Controller, VGroup, TextEditor, \
+                         ListEditor, InstanceEditor
 from envisage.api import Plugin, contributes_to
 from pyface.api import ImageResource
 
@@ -31,13 +32,12 @@ from cytoflow.operations.range2d import Range2DOp, RangeSelection2D
 from cytoflow.views.i_selectionview import ISelectionView
 
 from cytoflowgui.op_plugins.i_op_plugin \
-    import IOperationPlugin, OpHandlerMixin, PluginOpMixin, OP_PLUGIN_EXT, shared_op_traits
-from cytoflowgui.view_plugins.i_view_plugin import ViewHandlerMixin, PluginViewMixin
-from cytoflowgui.subset_editor import SubsetEditor
+    import IOperationPlugin, OperationHandler, PluginOpMixin, OP_PLUGIN_EXT, shared_op_traits
+from cytoflowgui.view_plugins.i_view_plugin import ViewController, PluginViewMixin
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.ext_enum_editor import ExtendableEnumEditor
 
-class Range2DHandler(Controller, OpHandlerMixin):
+class Range2DHandler(OperationHandler):
     
     def default_traits_view(self):
         return View(Item('name',
@@ -62,7 +62,7 @@ class Range2DHandler(Controller, OpHandlerMixin):
                          label = "Y High"),
                     shared_op_traits) 
         
-class RangeView2DHandler(Controller, ViewHandlerMixin):
+class RangeView2DHandler(ViewController):
     def default_traits_view(self):
         return View(VGroup(
                     VGroup(Item('name', 
@@ -83,9 +83,12 @@ class RangeView2DHandler(Controller, ViewHandlerMixin):
                                 label="Color\nFacet"),
                            label = "2D Range Setup View",
                            show_border = False),
-                    VGroup(Item('subset_dict',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "context.previous.conditions")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),

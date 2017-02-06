@@ -16,7 +16,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from traits.api import provides, Callable, Instance, Str, DelegatesTo
-from traitsui.api import View, Item, EnumEditor, Controller, VGroup, TextEditor
+from traitsui.api import View, Item, EnumEditor, Controller, VGroup, TextEditor, \
+                         ListEditor, InstanceEditor
 from envisage.api import Plugin, contributes_to
 from pyface.api import ImageResource
 
@@ -24,13 +25,12 @@ from cytoflow.operations import IOperation
 from cytoflow.operations.quad import QuadOp, QuadSelection
 
 from cytoflowgui.op_plugins.i_op_plugin \
-    import IOperationPlugin, OpHandlerMixin, PluginOpMixin, OP_PLUGIN_EXT, shared_op_traits
-from cytoflowgui.view_plugins.i_view_plugin import ViewHandlerMixin, PluginViewMixin
-from cytoflowgui.subset_editor import SubsetEditor
+    import IOperationPlugin, OperationHandler, PluginOpMixin, OP_PLUGIN_EXT, shared_op_traits
+from cytoflowgui.view_plugins.i_view_plugin import ViewController, PluginViewMixin
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.ext_enum_editor import ExtendableEnumEditor
 
-class QuadHandler(Controller, OpHandlerMixin):
+class QuadHandler(OperationHandler):
     def default_traits_view(self):
         return View(Item('name',
                          editor = TextEditor(auto_set = False)),
@@ -48,7 +48,7 @@ class QuadHandler(Controller, OpHandlerMixin):
                          label = "Y Threshold"),
                     shared_op_traits) 
         
-class ThresholdViewHandler(Controller, ViewHandlerMixin):
+class ThresholdViewHandler(ViewController):
     def default_traits_view(self):
         return View(VGroup(
                     VGroup(Item('name',
@@ -73,9 +73,12 @@ class ThresholdViewHandler(Controller, ViewHandlerMixin):
                                 label="Color\nFacet"),
                            label = "Quad Setup View",
                            show_border = False),
-                    VGroup(Item('subset_dict',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "context.previous.conditions")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),

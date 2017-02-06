@@ -23,7 +23,7 @@ Created on Oct 9, 2015
 
 import random, string, warnings
 
-from traitsui.api import View, Item, EnumEditor, Controller, VGroup, TextEditor
+from traitsui.api import View, Item, EnumEditor, Controller, VGroup, TextEditor, ListEditor, InstanceEditor
 from envisage.api import Plugin, contributes_to
 from traits.api import provides, Callable, Str, Instance
 from pyface.api import ImageResource
@@ -34,13 +34,12 @@ from cytoflow.views.histogram import HistogramView
 from cytoflow.views.i_selectionview import IView
 import cytoflow.utility as util
 
-from cytoflowgui.view_plugins.i_view_plugin import ViewHandlerMixin, PluginViewMixin
-from cytoflowgui.op_plugins import IOperationPlugin, OpHandlerMixin, OP_PLUGIN_EXT, shared_op_traits
-from cytoflowgui.subset_editor import SubsetEditor
+from cytoflowgui.view_plugins.i_view_plugin import ViewController, PluginViewMixin
+from cytoflowgui.op_plugins import IOperationPlugin, OperationHandler, OP_PLUGIN_EXT, shared_op_traits
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.op_plugins.i_op_plugin import PluginOpMixin
 
-class BinningHandler(Controller, OpHandlerMixin):
+class BinningHandler(OperationHandler):
     def default_traits_view(self):
         return View(Item('name',
                          editor = TextEditor(auto_set = False)),
@@ -62,7 +61,7 @@ class BinningPluginOp(PluginOpMixin, BinningOp):
     def default_view(self, **kwargs):
         return BinningPluginView(op = self, **kwargs)
 
-class BinningViewHandler(Controller, ViewHandlerMixin):
+class BinningViewHandler(ViewController):
     def default_traits_view(self):
         return View(VGroup(
                     VGroup(Item('name',
@@ -73,9 +72,12 @@ class BinningViewHandler(Controller, ViewHandlerMixin):
                                 style = 'readonly'),
                            label = "Binning Default Plot",
                            show_border = False)),
-                    VGroup(Item('subset_dict',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "context.previous.conditions")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),

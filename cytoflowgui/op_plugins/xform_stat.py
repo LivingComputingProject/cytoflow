@@ -26,7 +26,7 @@ import pandas as pd
 import scipy.stats
 
 from traitsui.api import View, Item, EnumEditor, Controller, VGroup, \
-                         CheckListEditor, TextEditor
+                         CheckListEditor, TextEditor, ListEditor, InstanceEditor
 from envisage.api import Plugin, contributes_to
 from traits.api import provides, Callable, Str, List, Dict, Property
 from pyface.api import ImageResource
@@ -34,8 +34,7 @@ from pyface.api import ImageResource
 from cytoflow.operations.xform_stat import TransformStatisticOp
 import cytoflow.utility as util
 
-from cytoflowgui.op_plugins import IOperationPlugin, OpHandlerMixin, OP_PLUGIN_EXT, shared_op_traits
-from cytoflowgui.subset_editor import SubsetEditor
+from cytoflowgui.op_plugins import IOperationPlugin, OperationHandler, OP_PLUGIN_EXT, shared_op_traits
 from cytoflowgui.op_plugins.i_op_plugin import PluginOpMixin
 
 mean_95ci = lambda x: util.ci(x, np.mean, boots = 100)
@@ -57,7 +56,7 @@ transform_functions = {"Mean" : np.mean,
                        }
 
 
-class TransformStatisticHandler(Controller, OpHandlerMixin):
+class TransformStatisticHandler(OperationHandler):
     
     prev_statistics = Property(depends_on = "info.ui.context")
     indices = Property(depends_on = "model.statistic, model.subset")
@@ -135,9 +134,12 @@ class TransformStatisticHandler(Controller, OpHandlerMixin):
                          
                          label = 'Group\nBy',
                          style = 'custom'),
-                    VGroup(Item('subset_dict',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "handler.levels")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),
@@ -145,7 +147,6 @@ class TransformStatisticHandler(Controller, OpHandlerMixin):
 
 class TransformStatisticPluginOp(TransformStatisticOp, PluginOpMixin):
     handler_factory = Callable(TransformStatisticHandler)
-    subset_dict = Dict(Str, List)
     
     # functions aren't picklable, so send the name instead
     function = Callable(transient = True)

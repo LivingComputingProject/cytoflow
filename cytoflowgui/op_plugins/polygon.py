@@ -22,7 +22,8 @@ Created on Apr 25, 2015
 '''
 
 from traits.api import provides, Callable, Str, Instance, DelegatesTo
-from traitsui.api import View, Item, EnumEditor, Controller, VGroup, TextEditor
+from traitsui.api import View, Item, EnumEditor, Controller, VGroup, TextEditor, \
+                         ListEditor, InstanceEditor
 from envisage.api import Plugin, contributes_to
 from pyface.api import ImageResource
 
@@ -30,14 +31,13 @@ from cytoflow.operations import IOperation
 from cytoflow.views.i_selectionview import ISelectionView
 from cytoflow.operations.polygon import PolygonOp, PolygonSelection
 
-from cytoflowgui.op_plugins import IOperationPlugin, OpHandlerMixin, OP_PLUGIN_EXT, shared_op_traits
-from cytoflowgui.view_plugins.i_view_plugin import ViewHandlerMixin, PluginViewMixin
-from cytoflowgui.subset_editor import SubsetEditor
+from cytoflowgui.op_plugins import IOperationPlugin, OperationHandler, OP_PLUGIN_EXT, shared_op_traits
+from cytoflowgui.view_plugins.i_view_plugin import ViewController, PluginViewMixin
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.ext_enum_editor import ExtendableEnumEditor
 from cytoflowgui.op_plugins.i_op_plugin import PluginOpMixin
 
-class PolygonHandler(Controller, OpHandlerMixin):
+class PolygonHandler(OperationHandler):
     def default_traits_view(self):
         return View(Item('name',
                          editor = TextEditor(auto_set = False)),
@@ -49,7 +49,7 @@ class PolygonHandler(Controller, OpHandlerMixin):
                          label = "Y Channel"),
                     shared_op_traits) 
         
-class PolygonViewHandler(Controller, ViewHandlerMixin):
+class PolygonViewHandler(ViewController):
     def default_traits_view(self):
         return View(VGroup(
                     VGroup(Item('name', 
@@ -70,9 +70,12 @@ class PolygonViewHandler(Controller, ViewHandlerMixin):
                                 label="Color\nFacet"),
                            label = "Polygon Setup View",
                            show_border = False),
-                    VGroup(Item('subset_dict',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "context.previous.conditions")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),

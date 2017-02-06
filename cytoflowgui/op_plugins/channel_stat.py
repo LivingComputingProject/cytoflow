@@ -24,17 +24,16 @@ Created on Oct 9, 2015
 import numpy as np
 import scipy.stats
 
-from traitsui.api import View, Item, EnumEditor, Controller, VGroup, \
-                         CheckListEditor, TextEditor
+from traitsui.api import (View, Item, EnumEditor, Controller, VGroup,
+                         CheckListEditor, TextEditor, ListEditor, InstanceEditor)
 from envisage.api import Plugin, contributes_to
-from traits.api import provides, Callable, Str, List, Dict
+from traits.api import provides, Callable
 from pyface.api import ImageResource
 
 from cytoflow.operations.channel_stat import ChannelStatisticOp
 import cytoflow.utility as util
 
-from cytoflowgui.op_plugins import IOperationPlugin, OpHandlerMixin, OP_PLUGIN_EXT, shared_op_traits
-from cytoflowgui.subset_editor import SubsetEditor
+from cytoflowgui.op_plugins import IOperationPlugin, OperationHandler, OP_PLUGIN_EXT, shared_op_traits
 from cytoflowgui.op_plugins.i_op_plugin import PluginOpMixin
 
 mean_95ci = lambda x: util.ci(x, np.mean, boots = 100)
@@ -52,7 +51,7 @@ summary_functions = {"Mean" : np.mean,
                      }
 
 
-class ChannelStatisticHandler(Controller, OpHandlerMixin):
+class ChannelStatisticHandler(OperationHandler):
     def default_traits_view(self):
         return View(Item('name',
                          editor = TextEditor(auto_set = False)),
@@ -67,9 +66,12 @@ class ChannelStatisticHandler(Controller, OpHandlerMixin):
                                                   name = 'context.previous.conditions_names'),
                          label = 'Group\nBy',
                          style = 'custom'),
-                    VGroup(Item('subset_dict',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "context.previous.conditions")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),
@@ -77,7 +79,6 @@ class ChannelStatisticHandler(Controller, OpHandlerMixin):
 
 class ChannelStatisticPluginOp(PluginOpMixin, ChannelStatisticOp):
     handler_factory = Callable(ChannelStatisticHandler)
-    subset_dict = Dict(Str, List)
     
     # functions aren't picklable, so send the name instead
     function = Callable(transient = True)

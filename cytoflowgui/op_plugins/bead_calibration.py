@@ -34,8 +34,8 @@ import cytoflow.utility as util
 from cytoflow.operations.bead_calibration import BeadCalibrationOp, BeadCalibrationDiagnostic
 from cytoflow.views.i_selectionview import IView
 
-from cytoflowgui.view_plugins.i_view_plugin import ViewHandlerMixin, PluginViewMixin
-from cytoflowgui.op_plugins import IOperationPlugin, OpHandlerMixin, OP_PLUGIN_EXT, shared_op_traits
+from cytoflowgui.view_plugins.i_view_plugin import ViewController, PluginViewMixin
+from cytoflowgui.op_plugins import IOperationPlugin, OperationHandler, OP_PLUGIN_EXT, shared_op_traits
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.op_plugins.i_op_plugin import PluginOpMixin
 from cytoflowgui.workflow_item import WorkflowItem
@@ -44,7 +44,7 @@ class _Unit(HasTraits):
     channel = Str
     unit = Str
 
-class BeadCalibrationHandler(Controller, OpHandlerMixin):
+class BeadCalibrationHandler(OperationHandler):
     
     add_channel = Event
     remove_channel = Event
@@ -192,7 +192,7 @@ class BeadCalibrationPluginOp(PluginOpMixin, BeadCalibrationOp):
         self._mefs.clear()
         self.changed = "estimate_result"
 
-class BeadCalibrationViewHandler(Controller, ViewHandlerMixin):
+class BeadCalibrationViewHandler(ViewController):
     def default_traits_view(self):
         return View(Item('name',
                          style = 'readonly'),

@@ -16,7 +16,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from traits.api import provides, Callable, Str, Instance, DelegatesTo
-from traitsui.api import View, Item, EnumEditor, Controller, VGroup, TextEditor
+from traitsui.api import View, Item, EnumEditor, Controller, VGroup, TextEditor, \
+                         ListEditor, InstanceEditor
 from envisage.api import Plugin, contributes_to
 from pyface.api import ImageResource
 
@@ -24,14 +25,13 @@ from cytoflow.views.i_selectionview import ISelectionView
 from cytoflow.operations import IOperation
 from cytoflow.operations.range import RangeOp, RangeSelection
 
-from cytoflowgui.op_plugins import IOperationPlugin, OpHandlerMixin, OP_PLUGIN_EXT, shared_op_traits
-from cytoflowgui.view_plugins.i_view_plugin import ViewHandlerMixin, PluginViewMixin
-from cytoflowgui.subset_editor import SubsetEditor
+from cytoflowgui.op_plugins import IOperationPlugin, OperationHandler, OP_PLUGIN_EXT, shared_op_traits
+from cytoflowgui.view_plugins.i_view_plugin import ViewController, PluginViewMixin
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.ext_enum_editor import ExtendableEnumEditor
 from cytoflowgui.op_plugins.i_op_plugin import PluginOpMixin
 
-class RangeHandler(Controller, OpHandlerMixin):
+class RangeHandler(OperationHandler):
     
     def default_traits_view(self):
         return View(Item('name',
@@ -45,7 +45,7 @@ class RangeHandler(Controller, OpHandlerMixin):
                          editor = TextEditor(auto_set = False)),
                     shared_op_traits) 
         
-class RangeViewHandler(Controller, ViewHandlerMixin):
+class RangeViewHandler(ViewController):
     def default_traits_view(self):
         return View(VGroup(
                     VGroup(Item('name',
@@ -60,9 +60,12 @@ class RangeViewHandler(Controller, ViewHandlerMixin):
                                 label="Color\nFacet"),
                             label = "Range Setup View",
                             show_border = False),
-                    VGroup(Item('subset',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "context.previous.conditions")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),

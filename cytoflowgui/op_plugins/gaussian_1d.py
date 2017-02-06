@@ -23,8 +23,9 @@ Created on Oct 9, 2015
 
 from sklearn import mixture
 
-from traitsui.api import View, Item, EnumEditor, Controller, VGroup, TextEditor, \
-                         CheckListEditor, ButtonEditor, TextEditor
+from traitsui.api import View, Item, EnumEditor, Controller, VGroup, \
+                         CheckListEditor, ButtonEditor, TextEditor, ListEditor, \
+                         InstanceEditor
 from envisage.api import Plugin, contributes_to
 from traits.api import provides, Callable, Instance, Str, List, Dict, Any, DelegatesTo, on_trait_change
 from pyface.api import ImageResource
@@ -34,13 +35,12 @@ from cytoflow.operations.gaussian_1d import GaussianMixture1DOp, GaussianMixture
 from cytoflow.views.i_selectionview import IView
 import cytoflow.utility as util
 
-from cytoflowgui.view_plugins.i_view_plugin import ViewHandlerMixin, PluginViewMixin
-from cytoflowgui.op_plugins import IOperationPlugin, OpHandlerMixin, OP_PLUGIN_EXT, shared_op_traits
-from cytoflowgui.subset_editor import SubsetEditor
+from cytoflowgui.view_plugins.i_view_plugin import ViewController, PluginViewMixin
+from cytoflowgui.op_plugins import IOperationPlugin, OperationHandler, OP_PLUGIN_EXT, shared_op_traits
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.op_plugins.i_op_plugin import PluginOpMixin
 
-class GaussianMixture1DHandler(Controller, OpHandlerMixin):
+class GaussianMixture1DHandler(OperationHandler):
     def default_traits_view(self):
         return View(Item('name',
                          editor = TextEditor(auto_set = False)),
@@ -59,9 +59,12 @@ class GaussianMixture1DHandler(Controller, OpHandlerMixin):
                                                   name = 'context.previous.conditions_names'),
                          label = 'Group\nEstimates\nBy',
                          style = 'custom'),
-                    VGroup(Item('subset_dict',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "context.previous.conditions")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),
@@ -92,7 +95,7 @@ class GaussianMixture1DPluginOp(PluginOpMixin, GaussianMixture1DOp):
     def clear_estimate(self):
         self._gmms = {}
         
-class GaussianMixture1DViewHandler(Controller, ViewHandlerMixin):
+class GaussianMixture1DViewHandler(ViewController):
     def default_traits_view(self):
         return View(VGroup(
                     VGroup(Item('name',

@@ -36,9 +36,8 @@ import cytoflow.utility as util
 from cytoflow.operations.bleedthrough_linear import BleedthroughLinearOp, BleedthroughLinearDiagnostic
 from cytoflow.views.i_selectionview import IView
 
-from cytoflowgui.view_plugins.i_view_plugin import ViewHandlerMixin, PluginViewMixin
-from cytoflowgui.op_plugins import IOperationPlugin, OpHandlerMixin, OP_PLUGIN_EXT, shared_op_traits
-from cytoflowgui.subset_editor import SubsetEditor
+from cytoflowgui.view_plugins.i_view_plugin import ViewController, PluginViewMixin
+from cytoflowgui.op_plugins import IOperationPlugin, OperationHandler, OP_PLUGIN_EXT, shared_op_traits
 from cytoflowgui.color_text_editor import ColorTextEditor
 from cytoflowgui.op_plugins.i_op_plugin import PluginOpMixin
 from cytoflowgui.workflow_item import WorkflowItem
@@ -47,7 +46,7 @@ class _Control(HasTraits):
     channel = Str
     file = File
     
-class BleedthroughLinearHandler(Controller, OpHandlerMixin):
+class BleedthroughLinearHandler(OperationHandler):
     
     add_control = Event
     remove_control = Event
@@ -88,11 +87,12 @@ class BleedthroughLinearHandler(Controller, OpHandlerMixin):
                                                label = "Remove a control")),
                     label = "Controls",
                     show_labels = False),
-                    VGroup(Item('subset_dict',
-                                show_label = False,
-                                editor = SubsetEditor(conditions = "context.previous.conditions",
-                                                      metadata = "context.previous.metadata",
-                                                      when = "'experiment' not in vars() or not experiment")),
+                    VGroup(Item('subset_list',
+                                editor = ListEditor(editor = InstanceEditor(),
+                                                    style = 'custom',
+                                                    mutable = False),
+                                style = 'custom',
+                                show_label = False),
                            label = "Subset",
                            show_border = False,
                            show_labels = False),
@@ -154,7 +154,7 @@ class BleedthroughLinearPluginOp(PluginOpMixin, BleedthroughLinearOp):
         self.spillover.clear()
         self.changed = "estimate_result"
 
-class BleedthroughLinearViewHandler(Controller, ViewHandlerMixin):
+class BleedthroughLinearViewHandler(ViewController):
     def default_traits_view(self):
         return View(Item('name',
                          style = 'readonly'),
